@@ -1,6 +1,3 @@
-/**
- * GeminiClient: Handles WebSocket communication
- */
 class GeminiClient {
   constructor(config) {
     this.websocket = null;
@@ -8,9 +5,14 @@ class GeminiClient {
     this.onMessage = config.onMessage;
     this.onClose = config.onClose;
     this.onError = config.onError;
+    this._reconnectAttempts = 0;
+    this._maxReconnect = 0;
   }
 
   connect() {
+    if (this.websocket && this.websocket.readyState <= WebSocket.OPEN) {
+      return;
+    }
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${protocol}//${window.location.host}/ws`;
 
@@ -18,6 +20,7 @@ class GeminiClient {
     this.websocket.binaryType = "arraybuffer";
 
     this.websocket.onopen = () => {
+      this._reconnectAttempts = 0;
       if (this.onOpen) this.onOpen();
     };
 
@@ -41,17 +44,25 @@ class GeminiClient {
   }
 
   sendText(text) {
-    this.send(JSON.stringify({ text: text }));
+    this.send(text);
   }
 
-  sendImage(base64Data, mimeType = "image/jpeg") {
+  sendImage(base64Data, mimeType = "image/jpeg", frameType = "image") {
     this.send(
       JSON.stringify({
-        type: "image",
+        type: frameType,
         mime_type: mimeType,
         data: base64Data,
       })
     );
+  }
+
+  sendCameraFrame(base64Data, mimeType = "image/jpeg") {
+    this.sendImage(base64Data, mimeType, "camera_frame");
+  }
+
+  sendScreenFrame(base64Data, mimeType = "image/jpeg") {
+    this.sendImage(base64Data, mimeType, "screen_frame");
   }
 
   disconnect() {

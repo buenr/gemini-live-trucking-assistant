@@ -12,10 +12,15 @@ from fastapi.staticfiles import StaticFiles
 from google.genai import types
 from gemini_live import GeminiLive
 from driver_tools import (
+    can_make_appointment,
+    get_change_log,
     get_driver_snapshot,
     get_fuel_stops,
+    get_hours_compliance_summary,
     get_hometime_status,
     get_pay_info,
+    get_settlement_breakdown,
+    get_trip_execution_status,
     get_route_info,
     submit_hometime_request,
     update_eta,
@@ -47,6 +52,42 @@ TRUCKING_TOOLS = [
                 "name": "get_route_info",
                 "description": "Retrieve current route, ETA, miles remaining, next stop, and load status.",
                 "parameters": {"type": "OBJECT", "properties": {}},
+            },
+            {
+                "name": "get_hours_compliance_summary",
+                "description": "Get core hours/compliance values: drive left, duty window left, cycle left, break due, and risk flags.",
+                "parameters": {"type": "OBJECT", "properties": {}},
+            },
+            {
+                "name": "can_make_appointment",
+                "description": "Check if current ETA and hours allow making an appointment time.",
+                "parameters": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "appointment_time_iso": {
+                            "type": "STRING",
+                            "description": "Optional ISO timestamp for appointment target.",
+                        }
+                    },
+                },
+            },
+            {
+                "name": "get_settlement_breakdown",
+                "description": "Get settlement details including miles variance, accessorials, deductions, and settlement status.",
+                "parameters": {"type": "OBJECT", "properties": {}},
+            },
+            {
+                "name": "get_trip_execution_status",
+                "description": "Get route execution snapshot: ETA confidence, appointment risk, delay history, and check-call status.",
+                "parameters": {"type": "OBJECT", "properties": {}},
+            },
+            {
+                "name": "get_change_log",
+                "description": "Retrieve recent audit logs for mutating driver data updates.",
+                "parameters": {
+                    "type": "OBJECT",
+                    "properties": {"limit": {"type": "INTEGER", "description": "How many logs to return"}},
+                },
             },
             {
                 "name": "update_eta",
@@ -130,6 +171,11 @@ TRUCKING_TOOL_MAPPING = {
     "submit_hometime_request": submit_hometime_request,
     "get_hometime_status": get_hometime_status,
     "get_fuel_stops": get_fuel_stops,
+    "get_change_log": get_change_log,
+    "get_hours_compliance_summary": get_hours_compliance_summary,
+    "can_make_appointment": can_make_appointment,
+    "get_settlement_breakdown": get_settlement_breakdown,
+    "get_trip_execution_status": get_trip_execution_status,
 }
 
 # Initialize FastAPI
@@ -189,12 +235,17 @@ async def websocket_endpoint(websocket: WebSocket):
                     text = message["text"]
                     try:
                         payload = json.loads(text)
-                        if isinstance(payload, dict) and payload.get("type") == "image":
-                            logger.info(f"Received image chunk from client: {len(payload['data'])} base64 chars")
-                            image_data = base64.b64decode(payload["data"])
+                        if isinstance(payload, dict) and payload.get("type") in (
+                            "image", "camera_frame", "screen_frame"
+                        ):
+                            raw = payload.get("data", "")
+                            if len(raw) > 2_000_000:
+                                logger.warning("Oversized image payload rejected")
+                                continue
+                            image_data = base64.b64decode(raw)
                             await video_input_queue.put(image_data)
                             continue
-                    except json.JSONDecodeError:
+                    except (json.JSONDecodeError, KeyError):
                         pass
 
                     await text_input_queue.put(text)

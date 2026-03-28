@@ -15,24 +15,79 @@ const videoPreview = document.getElementById("video-preview");
 const videoPlaceholder = document.getElementById("video-placeholder");
 const connectBtn = document.getElementById("connectBtn");
 const chatLog = document.getElementById("chat-log");
-const quickActionButtons = document.querySelectorAll(".quick-action");
+const quickActionButtons = document.querySelectorAll(".qa-btn");
+const sessionIndicator = document.getElementById("session-indicator");
+const sessionLabel = document.getElementById("session-label");
+const toastContainer = document.getElementById("toast-container");
 
 let currentGeminiMessageDiv = null;
 let currentUserMessageDiv = null;
+let micActive = false;
+let cameraActive = false;
+let screenActive = false;
 
+const WRITE_TOOLS = new Set([
+  "update_eta",
+  "update_load_status",
+  "submit_hometime_request",
+]);
+
+const TOOL_LABELS = {
+  update_eta: "ETA Updated",
+  update_load_status: "Load Status Updated",
+  submit_hometime_request: "Hometime Request Submitted",
+  get_route_info: "Route Retrieved",
+  get_pay_info: "Pay Info Retrieved",
+  get_hours_compliance_summary: "Hours Retrieved",
+  get_settlement_breakdown: "Settlement Retrieved",
+  get_trip_execution_status: "Trip Status Retrieved",
+  get_driver_snapshot: "Snapshot Retrieved",
+  get_fuel_stops: "Fuel Stops Retrieved",
+  get_hometime_status: "Hometime Status Retrieved",
+  can_make_appointment: "Appointment Check Done",
+  get_change_log: "Change Log Retrieved",
+};
+
+// --- Toast System ---
+function showToast(message, type = "info") {
+  const toast = document.createElement("div");
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+  toastContainer.appendChild(toast);
+  setTimeout(() => {
+    if (toast.parentNode) toast.parentNode.removeChild(toast);
+  }, 3500);
+}
+
+// --- Status Helpers ---
+function setStatus(text, cls) {
+  statusDiv.textContent = text;
+  statusDiv.className = `status ${cls}`;
+}
+
+function setSessionLive(live) {
+  if (live) {
+    sessionIndicator.className = "session-indicator live";
+    sessionLabel.textContent = "Live";
+  } else {
+    sessionIndicator.className = "session-indicator off";
+    sessionLabel.textContent = "Offline";
+  }
+}
+
+// --- MediaHandler + GeminiClient ---
 const mediaHandler = new MediaHandler();
 const geminiClient = new GeminiClient({
   onOpen: () => {
-    statusDiv.textContent = "Connected";
-    statusDiv.className = "status connected";
+    setStatus("Connected", "connected");
+    setSessionLive(true);
     authSection.classList.add("hidden");
     appSection.classList.remove("hidden");
 
-    // Send hidden instruction
     geminiClient.sendText(
-      `System: Introduce yourself as a truck driver in-cab copilot.
-       Mention you can help with route status, ETA updates, pay info, load updates, and hometime requests.
-       Keep it brief and professional.`
+      "System: Introduce yourself as a truck driver in-cab copilot. " +
+      "Mention you can help with route, ETA, pay, hours, load status, and hometime. " +
+      "Keep it to two sentences."
     );
   },
   onMessage: (event) => {
@@ -49,18 +104,21 @@ const geminiClient = new GeminiClient({
   },
   onClose: (e) => {
     console.log("WS Closed:", e);
-    statusDiv.textContent = "Disconnected";
-    statusDiv.className = "status disconnected";
+    setStatus("Disconnected", "disconnected");
+    setSessionLive(false);
     showSessionEnd();
   },
   onError: (e) => {
     console.error("WS Error:", e);
-    statusDiv.textContent = "Connection Error";
-    statusDiv.className = "status error";
+    setStatus("Connection Error", "error");
+    setSessionLive(false);
+    showToast("Connection error. Try reconnecting.", "error");
   },
 });
 
 function handleJsonMessage(msg) {
+  clearChatEmpty();
+
   if (msg.type === "interrupted") {
     mediaHandler.stopAudioPlayback();
     currentGeminiMessageDiv = null;
@@ -71,23 +129,30 @@ function handleJsonMessage(msg) {
   } else if (msg.type === "user") {
     if (currentUserMessageDiv) {
       currentUserMessageDiv.textContent += msg.text;
-      chatLog.scrollTop = chatLog.scrollHeight;
+      scrollChat();
     } else {
       currentUserMessageDiv = appendMessage("user", msg.text);
     }
   } else if (msg.type === "gemini") {
     if (currentGeminiMessageDiv) {
       currentGeminiMessageDiv.textContent += msg.text;
-      chatLog.scrollTop = chatLog.scrollHeight;
+      scrollChat();
     } else {
       currentGeminiMessageDiv = appendMessage("gemini", msg.text);
     }
   } else if (msg.type === "tool_call") {
-    appendMessage(
-      "gemini",
-      `Tool: ${msg.name} | Args: ${JSON.stringify(msg.args)} | Result: ${JSON.stringify(msg.result)}`
-    );
+    const label = TOOL_LABELS[msg.name] || msg.name;
+    if (WRITE_TOOLS.has(msg.name)) {
+      showToast(label, "info");
+    }
+  } else if (msg.type === "error") {
+    showToast("Session error: " + (msg.error || "unknown"), "error");
   }
+}
+
+function clearChatEmpty() {
+  const empty = chatLog.querySelector(".chat-empty");
+  if (empty) empty.remove();
 }
 
 function appendMessage(type, text) {
@@ -95,37 +160,42 @@ function appendMessage(type, text) {
   msgDiv.className = `message ${type}`;
   msgDiv.textContent = text;
   chatLog.appendChild(msgDiv);
-  chatLog.scrollTop = chatLog.scrollHeight;
+  scrollChat();
   return msgDiv;
 }
 
-// Connect Button Handler
+function scrollChat() {
+  chatLog.scrollTop = chatLog.scrollHeight;
+}
+
+// --- Connect ---
 connectBtn.onclick = async () => {
-  statusDiv.textContent = "Connecting...";
+  setStatus("Connecting...", "connecting");
   connectBtn.disabled = true;
 
   try {
-    // Initialize audio context on user gesture
     await mediaHandler.initializeAudio();
-
     geminiClient.connect();
   } catch (error) {
     console.error("Connection error:", error);
-    statusDiv.textContent = "Connection Failed: " + error.message;
-    statusDiv.className = "status error";
+    setStatus("Connection Failed", "error");
     connectBtn.disabled = false;
+    showToast("Failed to connect: " + error.message, "error");
   }
 };
 
-// UI Controls
+// --- Disconnect ---
 disconnectBtn.onclick = () => {
   geminiClient.disconnect();
 };
 
+// --- Mic ---
 micBtn.onclick = async () => {
-  if (mediaHandler.isRecording) {
+  if (micActive) {
     mediaHandler.stopAudio();
-    micBtn.textContent = "Start Mic";
+    micActive = false;
+    micBtn.dataset.active = "false";
+    micBtn.querySelector(".ctrl-label").textContent = "Mic Off";
   } else {
     try {
       await mediaHandler.startAudio((data) => {
@@ -133,54 +203,61 @@ micBtn.onclick = async () => {
           geminiClient.send(data);
         }
       });
-      micBtn.textContent = "Stop Mic";
+      micActive = true;
+      micBtn.dataset.active = "true";
+      micBtn.querySelector(".ctrl-label").textContent = "Mic On";
     } catch (e) {
-      alert("Could not start audio capture");
+      showToast("Could not start microphone", "error");
     }
   }
 };
 
+// --- Camera ---
 cameraBtn.onclick = async () => {
-  if (cameraBtn.textContent === "Stop Camera") {
+  if (cameraActive) {
     mediaHandler.stopVideo(videoPreview);
-    cameraBtn.textContent = "Start Camera";
-    screenBtn.textContent = "Share Screen";
+    cameraActive = false;
+    cameraBtn.dataset.active = "false";
+    cameraBtn.querySelector(".ctrl-label").textContent = "Camera";
     videoPlaceholder.classList.remove("hidden");
   } else {
-    // If another stream is active (e.g. Screen), stop it first
-    if (mediaHandler.videoStream) {
+    if (screenActive) {
       mediaHandler.stopVideo(videoPreview);
-      screenBtn.textContent = "Share Screen";
+      screenActive = false;
+      screenBtn.dataset.active = "false";
+      screenBtn.querySelector(".ctrl-label").textContent = "Screen";
     }
-
     try {
       await mediaHandler.startVideo(videoPreview, (base64Data) => {
         if (geminiClient.isConnected()) {
           geminiClient.sendImage(base64Data);
         }
       });
-      cameraBtn.textContent = "Stop Camera";
-      screenBtn.textContent = "Share Screen";
+      cameraActive = true;
+      cameraBtn.dataset.active = "true";
+      cameraBtn.querySelector(".ctrl-label").textContent = "Cam On";
       videoPlaceholder.classList.add("hidden");
     } catch (e) {
-      alert("Could not access camera");
+      showToast("Could not access camera", "error");
     }
   }
 };
 
+// --- Screen Share ---
 screenBtn.onclick = async () => {
-  if (screenBtn.textContent === "Stop Sharing") {
+  if (screenActive) {
     mediaHandler.stopVideo(videoPreview);
-    screenBtn.textContent = "Share Screen";
-    cameraBtn.textContent = "Start Camera";
+    screenActive = false;
+    screenBtn.dataset.active = "false";
+    screenBtn.querySelector(".ctrl-label").textContent = "Screen";
     videoPlaceholder.classList.remove("hidden");
   } else {
-    // If another stream is active (e.g. Camera), stop it first
-    if (mediaHandler.videoStream) {
+    if (cameraActive) {
       mediaHandler.stopVideo(videoPreview);
-      cameraBtn.textContent = "Start Camera";
+      cameraActive = false;
+      cameraBtn.dataset.active = "false";
+      cameraBtn.querySelector(".ctrl-label").textContent = "Camera";
     }
-
     try {
       await mediaHandler.startScreen(
         videoPreview,
@@ -190,43 +267,52 @@ screenBtn.onclick = async () => {
           }
         },
         () => {
-          // onEnded callback (e.g. user stopped sharing from browser)
-          screenBtn.textContent = "Share Screen";
+          screenActive = false;
+          screenBtn.dataset.active = "false";
+          screenBtn.querySelector(".ctrl-label").textContent = "Screen";
           videoPlaceholder.classList.remove("hidden");
         }
       );
-      screenBtn.textContent = "Stop Sharing";
-      cameraBtn.textContent = "Start Camera";
+      screenActive = true;
+      screenBtn.dataset.active = "true";
+      screenBtn.querySelector(".ctrl-label").textContent = "Sharing";
       videoPlaceholder.classList.add("hidden");
     } catch (e) {
-      alert("Could not share screen");
+      showToast("Could not share screen", "error");
     }
   }
 };
 
+// --- Text Input ---
 sendBtn.onclick = sendText;
 textInput.onkeypress = (e) => {
   if (e.key === "Enter") sendText();
 };
+
 quickActionButtons.forEach((btn) => {
   btn.onclick = () => {
     const prompt = btn.dataset.prompt;
     if (prompt && geminiClient.isConnected()) {
       geminiClient.sendText(prompt);
+      clearChatEmpty();
       appendMessage("user", prompt);
+    } else if (!geminiClient.isConnected()) {
+      showToast("Connect first to use quick actions", "warn");
     }
   };
 });
 
 function sendText() {
-  const text = textInput.value;
+  const text = textInput.value.trim();
   if (text && geminiClient.isConnected()) {
     geminiClient.sendText(text);
+    clearChatEmpty();
     appendMessage("user", text);
     textInput.value = "";
   }
 }
 
+// --- Session Lifecycle ---
 function resetUI() {
   authSection.classList.remove("hidden");
   appSection.classList.add("hidden");
@@ -236,11 +322,23 @@ function resetUI() {
   mediaHandler.stopVideo(videoPreview);
   videoPlaceholder.classList.remove("hidden");
 
-  micBtn.textContent = "Start Mic";
-  cameraBtn.textContent = "Start Camera";
-  screenBtn.textContent = "Share Screen";
-  chatLog.innerHTML = "";
+  micActive = false;
+  cameraActive = false;
+  screenActive = false;
+  micBtn.dataset.active = "false";
+  cameraBtn.dataset.active = "false";
+  screenBtn.dataset.active = "false";
+  micBtn.querySelector(".ctrl-label").textContent = "Mic Off";
+  cameraBtn.querySelector(".ctrl-label").textContent = "Camera";
+  screenBtn.querySelector(".ctrl-label").textContent = "Screen";
+
+  currentGeminiMessageDiv = null;
+  currentUserMessageDiv = null;
+
+  chatLog.innerHTML = '<div class="chat-empty">Voice transcript will appear here</div>';
   connectBtn.disabled = false;
+  setStatus("Disconnected", "disconnected");
+  setSessionLive(false);
 }
 
 function showSessionEnd() {
@@ -248,6 +346,11 @@ function showSessionEnd() {
   sessionEndSection.classList.remove("hidden");
   mediaHandler.stopAudio();
   mediaHandler.stopVideo(videoPreview);
+  micActive = false;
+  cameraActive = false;
+  screenActive = false;
+  currentGeminiMessageDiv = null;
+  currentUserMessageDiv = null;
 }
 
 restartBtn.onclick = () => {
