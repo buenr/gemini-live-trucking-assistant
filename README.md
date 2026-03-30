@@ -1,81 +1,88 @@
-# Gemini Live API Examples
+# Gemini Live API - Python SDK & Vanilla JS
 
-The Live API enables low-latency, real-time voice and video interactions with
-Gemini. It processes continuous streams of audio, video, or text to deliver
-immediate, human-like spoken responses, creating a natural conversational
-experience for your users.
+A demonstration of the Gemini Live API using the [Google Gen AI Python SDK](https://github.com/googleapis/python-genai) for the backend and vanilla JavaScript for the frontend. This example shows how to build a real-time multimodal application with a robust Python backend handling the API connection.
 
-![Live API Overview](https://ai.google.dev/gemini-api/docs/images/live-api-overview.png)
+## Quick Start
 
-[Try the Live API in Google AI Studio](https://aistudio.google.com/live)
+### 1. Backend Setup
 
-## Example use cases
+Install dependencies and start the FastAPI server using `uv`:
 
-Live API can be used to build real-time voice and video agents for a
-variety of industries, including:
+```bash
+# Create a virtual environment and install dependencies
+uv venv
+source .venv/bin/activate
+uv pip install -r requirements.txt
 
-*   **E-commerce and retail:** Shopping assistants that offer personalized
-    recommendations and support agents that resolve customer issues.
-*   **Gaming:** Interactive non-player characters (NPCs), in-game help
-    assistants, and real-time translation of in-game content.
-*   **Next-gen interfaces:** Voice- and video-enabled experiences in robotics,
-    smart glasses, and vehicles.
-*   **Healthcare:** Health companions for patient support and education.
-*   **Financial services:** AI advisors for wealth management and investment
-    guidance.
-*   **Education:** AI mentors and learner companions that provide personalized
-    instruction and feedback.
+# Start the server
+uv run main.py
+```
 
-## Key features
+### 2. Frontend
 
-Live API offers a comprehensive set of features for building
-robust voice and video agents:
+Open your browser and navigate to:
 
-*   [**Multilingual support**](https://ai.google.dev/gemini-api/docs/live-guide#supported-languages):
-    Converse in 70 supported languages.
-*   [**Barge-in**](https://ai.google.dev/gemini-api/docs/live-guide#interruptions):
-    Users can interrupt the model at any time for responsive interactions.
-*   [**Tool use**](https://ai.google.dev/gemini-api/docs/live-tools):
-    Integrates tools like function calling and Google Search for dynamic
-    interactions.
-*   [**Audio transcriptions**](https://ai.google.dev/gemini-api/docs/live-guide#audio-transcription):
-    Provides text transcripts of both user input and model output.
-*   [**Proactive audio**](https://ai.google.dev/gemini-api/docs/live-guide#proactive-audio):
-    Lets you control when the model responds and in what contexts.
-*   [**Affective dialog**](https://ai.google.dev/gemini-api/docs/live-guide#affective-dialog):
-    Adapts response style and tone to match the user's input expression.
+[http://localhost:8000](http://localhost:8000)
 
-## Technical specifications
+## Features
 
-The following table outlines the technical specifications for the
-Live API:
+- **Google Gen AI SDK**: Uses the official Python SDK (`google-genai`) for simplified API interaction.
+- **FastAPI Backend**: Robust, async-ready web server handling WebSocket connections.
+- **Real-time Streaming**: Bi-directional audio and video streaming.
+- **Tool Use**: Demonstrates how to register and handle server-side tools.
+- **Vanilla JS Frontend**: Lightweight frontend with no build steps or framework dependencies.
 
-| Category          | Details                                                                                     |
-| :---------------- | :------------------------------------------------------------------------------------------ |
-| Input modalities  | Audio (raw 16-bit PCM audio, 16kHz, little-endian), images/video (JPEG <= 1FPS), text       |
-| Output modalities | Audio (raw 16-bit PCM audio, 24kHz, little-endian), text                                    |
-| Protocol          | Stateful WebSocket connection (WSS)                                                         |
+## Project Structure
 
-## Examples
+```
+/
+├── main.py             # FastAPI server & WebSocket endpoint
+├── gemini_live.py      # Gemini Live API wrapper using Gen AI SDK
+├── requirements.txt    # Python dependencies
+└── frontend/
+    ├── index.html      # User Interface
+    ├── main.js         # Application logic
+    ├── gemini-client.js # WebSocket client for backend communication
+    ├── media-handler.js # Audio/Video capture and playback
+    └── pcm-processor.js # AudioWorklet for PCM processing
+```
 
-*   **[Gen AI SDK Python example](./gemini-live-genai-python-sdk/README.md)**: Recommended for ease of use. Connect to the Gemini Live API using the Gen AI SDK to build a real-time multimodal application with a Python backend.
-*   **[Epheremal tokens and raw WebSocket example](./gemini-live-ephemeral-tokens-websocket/README.md)**: RAW protocol control. Connect to the Gemini Live API using WebSockets to build a real-time multimodal application with a JavaScript frontend and a Python backend.
-*   **[Command-line Python example](./command-line/python/README.md)**: A minimal command-line app that streams microphone audio to the Gemini Live API and plays back the response in real time using Python.
-*   **[Command-line Node.js example](./command-line/node/README.md)**: A minimal command-line app that streams microphone audio to the Gemini Live API and plays back the response in real time using Node.js.
+## Configuration
 
-> [!TIP]
-> Install the [Gemini Live API Dev](https://github.com/google-gemini/gemini-skills?tab=readme-ov-file#gemini-live-api-dev) skill for AI-assisted development with the Live API in your coding agents.
+You can configure the application by setting environment variables or by using a `.env` file.
 
-## Partner integrations
+**Important:** You must set the `GEMINI_API_KEY` to your Google AI Studio API key.
 
-To streamline the development of real-time audio and video apps, you can use
-a third-party integration that supports the Gemini Live
-API over WebRTC or WebSockets.
+1.  Create a `.env` file in the root directory.
+2.  Add your API key:
 
-*   [LiveKit](https://docs.livekit.io/agents/models/realtime/plugins/gemini/): Use the Gemini Live API with LiveKit Agents.
-*   [Pipecat by Daily](https://docs.pipecat.ai/guides/features/gemini-live): Create a real-time AI chatbot using Gemini Live and Pipecat.
-*   [Fishjam by Software Mansion](https://docs.fishjam.io/tutorials/gemini-live-integration): Create live video and audio streaming applications with Fishjam.
-*   [Vision Agents by Stream](https://visionagents.ai/integrations/gemini): Build real-time voice and video AI applications with Vision Agents.
-*   [Voximplant](https://voximplant.com/products/gemini-client): Connect inbound and outbound calls to Live API with Voximplant.
-*   [Agent Development Kit (ADK)](https://google.github.io/adk-docs/streaming/): Create an agent and use the Agent Development Kit (ADK) Streaming to enable voice and video communication.
-*   [Firebase AI SDK](https://firebase.google.com/docs/ai-logic/live-api?api=dev): Get started with the Gemini Live API using Firebase AI Logic.
+```env
+GEMINI_API_KEY=your_api_key_here
+```
+
+Alternatively, you can set it in your shell:
+
+```bash
+export GEMINI_API_KEY=your_api_key_here
+```
+
+## Core Components
+
+### Backend (`gemini_live.py`)
+
+The `GeminiLive` class wraps the `genai.Client` to manage the session:
+
+```python
+# Connects using the SDK
+async with self.client.aio.live.connect(model=self.model, config=config) as session:
+    # Manages input/output queues
+    await asyncio.gather(
+        send_audio(),
+        send_video(),
+        receive_responses()
+    )
+```
+
+### Frontend (`gemini-client.js`)
+
+The frontend communicates with the FastAPI backend via WebSockets, sending base64-encoded media chunks and receiving audio responses.
