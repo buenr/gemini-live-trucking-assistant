@@ -15,9 +15,6 @@ DRIVER_PROFILE: dict[str, Any] = {
     "hours_left_today": 6.75,
 }
 
-SIMULATION_STATE: dict[str, Any] = {
-    "last_tick_iso": datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
-}
 
 ROUTE_STATE: dict[str, Any] = {
     "load_id": "LD-99017",
@@ -81,39 +78,6 @@ def _parse_iso(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", ""))
 
 
-def _apply_simulation_tick() -> None:
-    now = datetime.utcnow().replace(microsecond=0)
-    last = _parse_iso(SIMULATION_STATE["last_tick_iso"])
-    elapsed_minutes = max(0, int((now - last).total_seconds() // 60))
-    if elapsed_minutes == 0:
-        return
-
-    # Route simulation
-    mph = 52
-    miles_delta = round((mph / 60) * elapsed_minutes, 1)
-    ROUTE_STATE["remaining_miles"] = max(0, round(ROUTE_STATE["remaining_miles"] - miles_delta, 1))
-    ROUTE_STATE["remaining_drive_time_hours"] = max(
-        0, round(ROUTE_STATE["remaining_drive_time_hours"] - (elapsed_minutes / 60), 2)
-    )
-    eta = _parse_iso(ROUTE_STATE["eta_iso"])
-    ROUTE_STATE["eta_iso"] = (eta - timedelta(minutes=elapsed_minutes)).replace(tzinfo=None).isoformat()
-
-    # Hours simulation
-    HOURS_STATE["drive_hours_left"] = max(0, round(HOURS_STATE["drive_hours_left"] - (elapsed_minutes / 60), 2))
-    HOURS_STATE["on_duty_window_left"] = max(
-        0, round(HOURS_STATE["on_duty_window_left"] - (elapsed_minutes / 60), 2)
-    )
-    HOURS_STATE["cycle_hours_left"] = max(0, round(HOURS_STATE["cycle_hours_left"] - (elapsed_minutes / 60), 2))
-    HOURS_STATE["next_break_due_minutes"] = max(0, HOURS_STATE["next_break_due_minutes"] - elapsed_minutes)
-
-    # Pay simulation
-    PAY_STATE["miles_paid"] = round(PAY_STATE["miles_paid"] + miles_delta, 1)
-    if PAY_STATE["miles_paid"] > PAY_STATE["dispatched_miles"]:
-        PAY_STATE["exceptions"] = ["Miles paid exceeded dispatched miles; verify dispatch feed."]
-    else:
-        PAY_STATE["exceptions"] = []
-
-    SIMULATION_STATE["last_tick_iso"] = now.isoformat() + "Z"
 
 
 def _record_change(tool_call: str, changes: dict[str, Any], metadata: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -130,7 +94,6 @@ def _record_change(tool_call: str, changes: dict[str, Any], metadata: dict[str, 
 
 
 def get_driver_snapshot() -> dict[str, Any]:
-    _apply_simulation_tick()
     return {
         "success": True,
         "action": "get_driver_snapshot",
@@ -141,7 +104,6 @@ def get_driver_snapshot() -> dict[str, Any]:
 
 
 def get_route_info() -> dict[str, Any]:
-    _apply_simulation_tick()
     return {
         "success": True,
         "action": "get_route_info",
@@ -160,7 +122,6 @@ def get_route_info() -> dict[str, Any]:
 
 
 def update_eta(new_eta_iso: str, reason: str = "", stop_name: str = "") -> dict[str, Any]:
-    _apply_simulation_tick()
     _validate_iso_timestamp(new_eta_iso)
     previous_eta = ROUTE_STATE["eta_iso"]
     previous_stop = ROUTE_STATE["next_stop"]
@@ -196,7 +157,6 @@ def update_eta(new_eta_iso: str, reason: str = "", stop_name: str = "") -> dict[
 
 
 def update_load_status(status: str, location: str = "", note: str = "") -> dict[str, Any]:
-    _apply_simulation_tick()
     allowed = {"arrived", "loaded", "in_transit", "at_receiver", "delivered", "delayed"}
     normalized = status.strip().lower()
     if normalized not in allowed:
@@ -244,7 +204,6 @@ def update_load_status(status: str, location: str = "", note: str = "") -> dict[
 
 
 def get_pay_info(week: str = "current") -> dict[str, Any]:
-    _apply_simulation_tick()
     miles = PAY_STATE["miles_paid"]
     base_pay = round(miles * PAY_STATE["rate_per_mile_usd"], 2)
     gross = round(base_pay + PAY_STATE["accessorials_usd"], 2)
@@ -267,7 +226,6 @@ def get_pay_info(week: str = "current") -> dict[str, Any]:
 def submit_hometime_request(
     start_date: str, end_date: str, location: str, notes: str = ""
 ) -> dict[str, Any]:
-    _apply_simulation_tick()
     start = datetime.fromisoformat(start_date)
     end = datetime.fromisoformat(end_date)
     if end < start:
@@ -303,7 +261,6 @@ def submit_hometime_request(
 
 
 def get_hometime_status(request_id: str = "") -> dict[str, Any]:
-    _apply_simulation_tick()
     if request_id:
         for req in HOMETIME_REQUESTS:
             if req["request_id"] == request_id:
@@ -334,7 +291,6 @@ def get_hometime_status(request_id: str = "") -> dict[str, Any]:
 
 
 def get_fuel_stops(limit: int = 3) -> dict[str, Any]:
-    _apply_simulation_tick()
     if limit < 1:
         raise ValueError("limit must be at least 1")
     return {
@@ -347,7 +303,6 @@ def get_fuel_stops(limit: int = 3) -> dict[str, Any]:
 
 
 def get_change_log(limit: int = 20) -> dict[str, Any]:
-    _apply_simulation_tick()
     if limit < 1:
         raise ValueError("limit must be at least 1")
     return {
@@ -360,7 +315,6 @@ def get_change_log(limit: int = 20) -> dict[str, Any]:
 
 
 def get_hours_compliance_summary() -> dict[str, Any]:
-    _apply_simulation_tick()
     drive_left = HOURS_STATE["drive_hours_left"]
     appointment_risk = "high" if drive_left < ROUTE_STATE["remaining_drive_time_hours"] else "low"
     violation_risk = "at_risk" if HOURS_STATE["next_break_due_minutes"] <= 30 else "ok"
@@ -379,7 +333,6 @@ def get_hours_compliance_summary() -> dict[str, Any]:
 
 
 def can_make_appointment(appointment_time_iso: str = "") -> dict[str, Any]:
-    _apply_simulation_tick()
     eta = _parse_iso(ROUTE_STATE["eta_iso"])
     appointment_time = _parse_iso(appointment_time_iso) if appointment_time_iso else eta + timedelta(hours=1)
     can_make = eta <= appointment_time and HOURS_STATE["drive_hours_left"] >= ROUTE_STATE["remaining_drive_time_hours"]
@@ -396,7 +349,6 @@ def can_make_appointment(appointment_time_iso: str = "") -> dict[str, Any]:
 
 
 def get_settlement_breakdown() -> dict[str, Any]:
-    _apply_simulation_tick()
     miles_variance = round(PAY_STATE["dispatched_miles"] - PAY_STATE["miles_paid"], 1)
     accessorials = {
         "detention_usd": PAY_STATE["detention_usd"],
@@ -420,7 +372,6 @@ def get_settlement_breakdown() -> dict[str, Any]:
 
 
 def get_trip_execution_status() -> dict[str, Any]:
-    _apply_simulation_tick()
     eta_confidence_minutes = 20 if ROUTE_STATE["status"] == "in_transit" else 10
     appointment_risk = "late" if ROUTE_STATE["remaining_drive_time_hours"] > HOURS_STATE["drive_hours_left"] else "on_time"
     return {

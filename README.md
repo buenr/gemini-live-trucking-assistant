@@ -38,13 +38,6 @@ Visit [http://localhost:8000](http://localhost:8000).
 
 ## 🛠️ Untold Technical Details
 
-### 🔄 Dynamic Simulation Engine
-Unlike static demos, this assistant features a **temporal simulation engine** in `driver_tools.py`. It uses a "tick" based approach (`_apply_simulation_tick`) where:
-- **Elapsed Time Tracking**: The system calculates time passed since the last interaction.
-- **Route Progress**: Automatically reduces remaining miles and drive time based on a simulated 52 MPH average speed.
-- **HOS Consumption**: Real-time depletion of driving, on-duty, and cycle hours.
-- **Pay Accumulation**: Miles paid are incremented dynamically as the simulation "drives" the truck forward.
-
 ### 📝 Immutable Audit Logging (CHANGE_LOG)
 The system maintains a high-fidelity audit trail of all mutating operations (`update_eta`, `update_load_status`, `submit_hometime_request`).
 - **Snapshot Diffing**: Every change logs a "before" and "after" state for the modified fields.
