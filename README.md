@@ -1,6 +1,6 @@
 # Gemini Live Truck Driver Assistant
 
-A real-time, voice-first trucking copilot built with FastAPI, Gemini Live, and vanilla JavaScript. It supports complex dispatch and driver workflows including route/ETA updates, hours-of-service (HOS) compliance, pay/settlement visibility, hometime requests, and check-call status updates.
+A real-time, voice-first trucking copilot built with FastAPI, Gemini Live, and vanilla JavaScript. It supports complex dispatch and driver workflows including route/ETA updates, hours-of-service (HOS) compliance, pay/settlement visibility, hometime requests, and direct messaging to Driver Leaders or CSRs.
 
 ## 🚀 Quick Start
 
@@ -13,6 +13,7 @@ GEMINI_API_KEY=your_api_key_here
 # Optional settings
 MODEL=gemini-3.1-flash-live-preview
 PORT=8000
+DRIVER_LEADER_PHONE=123-456-7890
 ```
 
 ### 2. Install dependencies and run
@@ -36,34 +37,25 @@ Visit [http://localhost:8000](http://localhost:8000).
 
 ---
 
-## 🛠️ Untold Technical Details
+## 🛠️ Technical Highlights
 
-### 📝 Immutable Audit Logging (CHANGE_LOG)
-The system maintains a high-fidelity audit trail of all mutating operations (`update_eta`, `update_load_status`, `submit_hometime_request`).
+### 🚄 Optimized Session Handling
+The system uses a robust WebSocket orchestration layer designed for the high-latency, intermittent connectivity often found on the road:
+- **Clean Disconnects**: Gracefully handles browser closures and session pauses without server-side crashes.
+- **Session Resumption**: Automatically retrieves and manages Gemini resumption handles, allowing the conversation to continue seamlessly after a brief drop.
+- **Noise-Reduced Logging**: Optimized logging levels for production-like monitoring of session health.
+
+### 📝 Immutable Audit Logging
+The system maintains a high-fidelity audit trail of all mutating operations (`update_eta`, `update_load_status`, `submit_hometime_request`, `send_message_to_driver_leader`).
 - **Snapshot Diffing**: Every change logs a "before" and "after" state for the modified fields.
-- **Traceability**: Each log entry includes a unique `log_id`, ISO timestamp, tool call origin, and rich metadata (e.g., `load_id`, `reason`).
+- **Traceability**: Each log entry includes a unique `log_id`, ISO timestamp, and rich metadata (e.g., `load_id`, `reason`).
 
-### 📹 Multimodal Interactions
-While primarily "voice-first," the assistant is fully multimodal:
-- **Audio**: Low-latency 16kHz PCM streaming (Zephyr voice).
-- **Video/Camera**: Real-time frame analysis (JPEG blobs) allowing the assistant to "see" documents, road signs, or in-cab conditions.
-- **Screen Share**: Native browser screen capture for collaborative troubleshooting or route review.
-
-### 🧠 Domain-Specific Intelligence
-The tools aren't just data accessors; they implement trucking business logic:
-- **HOS Compliance**: `get_hours_compliance_summary` calculates `violation_risk` and identifies if a break is due within 30 minutes.
-- **Feasibility Checking**: `can_make_appointment` uses current ETA and remaining drive hours to predict if a delivery window is at risk.
-- **Smart Settlements**: `get_settlement_breakdown` calculates miles variance between dispatched and paid miles to flag potential pay discrepancies.
-
----
-
-## 💻 Frontend Sophistication
-
-The vanilla JS frontend (`frontend/`) is designed for modern, high-intensity cab use:
-- **Reactive Data Dashboard**: A live grid that highlights specific fields (using CSS transitions) whenever they are updated by a tool call.
-- **Voice-only interaction**: The driver speaks to the copilot; transcripts still appear in the chat panel for readability.
-- **Bidirectional UI Sync**: The UI reflects background simulation changes automatically when the driver requests a snapshot.
-- **Audio Leveling**: Visualizers and volume handling for seamless voice interaction.
+### 🧠 Consolidated "Snapshot" Intelligence
+Instead of making multiple API calls, the assistant uses a powerful `get_driver_snapshot` tool that provides:
+- **Unified Context**: Driver profile, route, HOS clocks, pay breakdown, and dispatch messages in one go.
+- **HOS Compliance**: Calculates `violation_risk` and identifies if a break is due soon.
+- **Feasibility Checking**: Predicts if delivery windows are at risk based on current drive time and location.
+- **Contact Escalation**: Provides direct phone numbers for Driver Leaders, CSRs, and specialized departments (Safety, Payroll, Roadside).
 
 ---
 
@@ -74,6 +66,7 @@ The vanilla JS frontend (`frontend/`) is designed for modern, high-intensity cab
 ├── main.py              # FastAPI app, Tool declarations, WebSocket orchestration
 ├── gemini_live.py       # Gemini Live session manager (Multimodal + Tool orchestration)
 ├── driver_tools.py      # Simulation engine, Trucking logic, Audit log, State persistence
+├── tool_validation.py   # Strict schema validation for model-invoked tool arguments
 ├── requirements.txt
 └── frontend/
     ├── index.html       # Ultra-clean driver dashboard
@@ -84,38 +77,26 @@ The vanilla JS frontend (`frontend/`) is designed for modern, high-intensity cab
     └── pcm-processor.js # Real-time audio processing worklet
 ```
 
-## ⚙️ Gemini Configuration
-
-- **System Instruction**: Explicitly tuned for brevity and high-reliability tool-grounded responses in noisy in-cab environments.
-- **Modality**: Configured for `AUDIO` response modality with the `Zephyr` prebuilt voice.
-- **Turn Detection**: Uses `TURN_INCLUDES_ONLY_ACTIVITY` for natural, interruptible conversations.
-
 ---
 
-## 🛠️ Available Tools & Data Points
+## 🛠️ Available Tools
 
 The assistant is grounded in a mock trucking ERP/TMS system via the following toolset:
 
-### 🔧 Tool Calls (Functions)
-
 | Tool Name | Description | Key Parameters |
 | :--- | :--- | :--- |
-| `get_status` | Comprehensive snapshot of driver, route, and ETA feasibility. | `appointment_time_iso` (optional) |
-| `get_stop_plan` | HOS compliance summary and suggested fuel stops with parking. | `limit` (default 3) |
-| `get_pay_and_settlement` | Detailed breakdown of weekly earnings, miles variance, and deductions. | `week` (default "current") |
+| `get_driver_snapshot` | Unified snapshot of ALL facts: route, hours, pay, messages, and escalation contacts. | `appointment_time_iso`, `dispatch_unread_only` |
 | `update_eta` | Updates the load's ETA and records the reason in the audit log. | `new_eta_iso`, `reason`, `stop_name` |
-| `update_load_status` | Submits check-calls (e.g., `arrived`, `loaded`, `delivered`). | `status`, `location`, `note` |
+| `update_load_status` | Submits check-calls (e.g., `in_transit`, `arrived`, `delivered`). | `status`, `location`, `note` |
 | `submit_hometime_request`| Files a formal request for time off at a specific location. | `start_date`, `end_date`, `location` |
-| `get_hometime_status` | Retrieves status for the latest or a specific hometime request. | `request_id` (optional) |
-| `get_dispatch_messages` | Fetches fleet messages (Safety, Dispatch, Payroll) with priority. | `unread_only`, `limit` |
+| `send_message_to_driver_leader` | Queues a dictated note or operational update to the assigned Driver Leader. | `notes_dictation`, `subject` |
+| `send_message_to_csr` | Sends a customer-facing message regarding load/appointment details. | `notes_dictation`, `subject` |
 
-### 📊 Data Points Available
+### 📊 Data Points Available to Gemini
 
-- **Driver Profile**: Name, ID, Truck Number, Fleet, and Daily Hours remaining.
-- **Route & Load**: Origin/Destination, Shipper/Receiver, Current Location, Next Stop, and Appointment Windows.
-- **Trip Execution**: Live ETA, remaining miles, estimated drive time, and "at risk" feasibility flags.
-- **HOS Compliance**: 11hr (Drive), 14hr (On-Duty), and 70hr (Cycle) clocks; minutes until next required 30-min break.
-- **Financials**: Dispatched vs. Paid miles variance, rate per mile, and accessorials (Detention, Layover, etc.).
-- **Fuel & Parking**: Suggested stops based on route, including distance and parking availability (Low/Med/High).
+- **HOS Compliance**: 11hr (Drive), 14hr (On-Duty), and 70hr (Cycle) clocks; minutes until next required break.
+- **Financials**: Dispatched vs. Paid miles variance, rate per mile, accessorials, and next settlement date.
+- **Fuel & Parking**: Suggested stops based on route, including distance and parking availability.
 - **Communication**: Threaded messages from Dispatch, Safety, and Payroll with priority levels.
+- **Escalation**: Direct lines for Shop, Payroll, Licensing, Safety, and Roadside departments.
 
