@@ -13,7 +13,6 @@ GEMINI_API_KEY=your_api_key_here
 # Optional settings
 MODEL=gemini-3.1-flash-live-preview
 PORT=8000
-DRIVER_LEADER_PHONE=123-456-7890
 ```
 
 ### 2. Install dependencies and run

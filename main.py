@@ -41,7 +41,6 @@ logger = logging.getLogger(__name__)
 # Configuration
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 MODEL = os.getenv("MODEL", "gemini-3.1-flash-live-preview")
-DRIVER_LEADER_PHONE = os.getenv("DRIVER_LEADER_PHONE", "").strip() or None
 
 
 def _env_int(name: str, default: int) -> int:
@@ -343,7 +342,6 @@ async def websocket_endpoint(websocket: WebSocket):
         input_sample_rate=16000,
         tools=TRUCKING_TOOLS,
         tool_mapping=TRUCKING_TOOL_MAPPING,
-        driver_leader_phone=DRIVER_LEADER_PHONE,
         context_trigger_tokens=CONTEXT_COMPRESSION_TRIGGER_TOKENS,
         context_target_tokens=CONTEXT_SLIDING_TARGET_TOKENS,
         max_output_tokens=LIVE_MAX_OUTPUT_TOKENS,

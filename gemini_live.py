@@ -66,7 +66,6 @@ class GeminiLive:
         input_sample_rate,
         tools=None,
         tool_mapping=None,
-        driver_leader_phone=None,
         *,
         context_trigger_tokens=50_000,
         context_target_tokens=42_000,
@@ -82,7 +81,6 @@ class GeminiLive:
             input_sample_rate (int): The sample rate for audio input.
             tools (list, optional): List of tools to enable. Defaults to None.
             tool_mapping (dict, optional): Mapping of tool names to functions. Defaults to None.
-            driver_leader_phone (str, optional): Driver Leader phone for escalation when the model cannot help.
             context_trigger_tokens (int): Token threshold to trigger context window compression.
             context_target_tokens (int): Target context size after sliding-window compression.
             max_output_tokens (int): Cap on model output tokens (shorter spoken replies).
@@ -94,7 +92,6 @@ class GeminiLive:
         self.client = genai.Client(api_key=api_key)
         self.tools = tools or []
         self.tool_mapping = tool_mapping or {}
-        self.driver_leader_phone = (driver_leader_phone or "").strip() or None
         self.context_trigger_tokens = int(context_trigger_tokens)
         self.context_target_tokens = int(context_target_tokens)
         self.max_output_tokens = int(max_output_tokens)
@@ -127,17 +124,10 @@ class GeminiLive:
             "If the driver sounds irritated, frustrated, or asks for a person, first acknowledge the frustration in one short sentence, "
             "then proactively suggest transfer/call escalation to a Driver Leader. "
         )
-        if self.driver_leader_phone:
-            escalation = (
-                f" Escalation: If you are stuck, lack information or tools to help safely, or the driver needs a human, "
-                f"suggest they transfer or call their Driver Leader at {self.driver_leader_phone} for live assistance. "
-                f"Offer to repeat the number slowly if asked."
-            )
-        else:
-            escalation = (
-                " Escalation: If you are stuck, lack information or tools to help safely, or the driver needs a human, "
-                "suggest they contact their Driver Leader for live assistance."
-            )
+        escalation = (
+            " Escalation: If you are stuck, lack information or tools to help safely, or the driver needs a human, "
+            "call get_driver_snapshot to find the Driver Leader's phone number and suggest they call it for live assistance."
+        )
         return base + escalation
 
     async def start_session(

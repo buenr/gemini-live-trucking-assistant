@@ -77,14 +77,14 @@ FUEL_STOPS: list[dict[str, Any]] = [
 ]
 
 # Assigned DL / CSR for outbound tools (mock — would come from fleet/TMS per driver).
-# Optional env overrides: DRIVER_LEADER_PHONE, CSR_PHONE (digits or formatted).
+# Optional env overrides: CSR_PHONE (digits or formatted).
 DRIVER_LEADER_CONTACT: dict[str, str] = {
-    "name": "Taylor Nguyen",
+    "name": "Taylor Jones",
     "code": "388421",
     "phone": "1-800-555-0101",
 }
 CSR_CONTACT: dict[str, str] = {
-    "name": "Sam Okonkwo",
+    "name": "Sam Franklin",
     "code": "451092",
     "phone": "1-800-555-0102",
 }
@@ -120,11 +120,7 @@ _DEPARTMENT_ESCALATION: list[dict[str, str]] = [
 
 
 def _driver_leader_contact_resolved() -> dict[str, str]:
-    d = dict(DRIVER_LEADER_CONTACT)
-    override = (os.getenv("DRIVER_LEADER_PHONE") or "").strip()
-    if override:
-        d["phone"] = override
-    return d
+    return dict(DRIVER_LEADER_CONTACT)
 
 
 def _csr_contact_resolved() -> dict[str, str]:
