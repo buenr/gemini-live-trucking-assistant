@@ -42,11 +42,10 @@ Visit [http://localhost:8000](http://localhost:8000).
 The system maintains a high-fidelity audit trail of all mutating operations (`update_eta`, `update_load_status`, `submit_hometime_request`).
 - **Snapshot Diffing**: Every change logs a "before" and "after" state for the modified fields.
 - **Traceability**: Each log entry includes a unique `log_id`, ISO timestamp, tool call origin, and rich metadata (e.g., `load_id`, `reason`).
-- **Log Access**: The `get_change_log` tool allows the assistant (and the user) to review precisely what changed and why.
 
 ### 📹 Multimodal Interactions
 While primarily "voice-first," the assistant is fully multimodal:
-- **Audio**: Low-latency 16kHz PCM streaming (Puck voice).
+- **Audio**: Low-latency 16kHz PCM streaming (Zephyr voice).
 - **Video/Camera**: Real-time frame analysis (JPEG blobs) allowing the assistant to "see" documents, road signs, or in-cab conditions.
 - **Screen Share**: Native browser screen capture for collaborative troubleshooting or route review.
 
@@ -62,7 +61,7 @@ The tools aren't just data accessors; they implement trucking business logic:
 
 The vanilla JS frontend (`frontend/`) is designed for modern, high-intensity cab use:
 - **Reactive Data Dashboard**: A live grid that highlights specific fields (using CSS transitions) whenever they are updated by a tool call.
-- **Intelligent Quick Actions**: Context-aware buttons that send targeted prompts to Gemini, optimized for common driver queries (Route, Pay, Hours).
+- **Voice-only interaction**: The driver speaks to the copilot; transcripts still appear in the chat panel for readability.
 - **Bidirectional UI Sync**: The UI reflects background simulation changes automatically when the driver requests a snapshot.
 - **Audio Leveling**: Visualizers and volume handling for seamless voice interaction.
 
@@ -88,6 +87,35 @@ The vanilla JS frontend (`frontend/`) is designed for modern, high-intensity cab
 ## ⚙️ Gemini Configuration
 
 - **System Instruction**: Explicitly tuned for brevity and high-reliability tool-grounded responses in noisy in-cab environments.
-- **Modality**: Configured for `AUDIO` response modality with the `Puck` prebuilt voice.
+- **Modality**: Configured for `AUDIO` response modality with the `Zephyr` prebuilt voice.
 - **Turn Detection**: Uses `TURN_INCLUDES_ONLY_ACTIVITY` for natural, interruptible conversations.
+
+---
+
+## 🛠️ Available Tools & Data Points
+
+The assistant is grounded in a mock trucking ERP/TMS system via the following toolset:
+
+### 🔧 Tool Calls (Functions)
+
+| Tool Name | Description | Key Parameters |
+| :--- | :--- | :--- |
+| `get_status` | Comprehensive snapshot of driver, route, and ETA feasibility. | `appointment_time_iso` (optional) |
+| `get_stop_plan` | HOS compliance summary and suggested fuel stops with parking. | `limit` (default 3) |
+| `get_pay_and_settlement` | Detailed breakdown of weekly earnings, miles variance, and deductions. | `week` (default "current") |
+| `update_eta` | Updates the load's ETA and records the reason in the audit log. | `new_eta_iso`, `reason`, `stop_name` |
+| `update_load_status` | Submits check-calls (e.g., `arrived`, `loaded`, `delivered`). | `status`, `location`, `note` |
+| `submit_hometime_request`| Files a formal request for time off at a specific location. | `start_date`, `end_date`, `location` |
+| `get_hometime_status` | Retrieves status for the latest or a specific hometime request. | `request_id` (optional) |
+| `get_dispatch_messages` | Fetches fleet messages (Safety, Dispatch, Payroll) with priority. | `unread_only`, `limit` |
+
+### 📊 Data Points Available
+
+- **Driver Profile**: Name, ID, Truck Number, Fleet, and Daily Hours remaining.
+- **Route & Load**: Origin/Destination, Shipper/Receiver, Current Location, Next Stop, and Appointment Windows.
+- **Trip Execution**: Live ETA, remaining miles, estimated drive time, and "at risk" feasibility flags.
+- **HOS Compliance**: 11hr (Drive), 14hr (On-Duty), and 70hr (Cycle) clocks; minutes until next required 30-min break.
+- **Financials**: Dispatched vs. Paid miles variance, rate per mile, and accessorials (Detention, Layover, etc.).
+- **Fuel & Parking**: Suggested stops based on route, including distance and parking availability (Low/Med/High).
+- **Communication**: Threaded messages from Dispatch, Safety, and Payroll with priority levels.
 

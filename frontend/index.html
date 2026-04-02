@@ -84,6 +84,44 @@
                 <canvas id="video-canvas" style="display: none"></canvas>
               </div>
 
+              <div class="vad-row">
+                <label class="vad-label" for="vadPreset">Mic environment</label>
+                <select id="vadPreset" class="vad-select" aria-describedby="vadPresetHint">
+                  <option
+                    value="normal"
+                    title="Default detection. Change and reconnect to apply."
+                  >
+                    Normal cab
+                  </option>
+                  <option
+                    value="quiet_cab"
+                    title="Picks up softer speech; short pauses. Best when the cab is quiet."
+                  >
+                    Quiet cab
+                  </option>
+                  <option
+                    value="noisy_sensitive"
+                    title="Easier to start when you speak softly with engine or road noise; may react to steady background noise."
+                  >
+                    Noisy cab — soft voice
+                  </option>
+                  <option
+                    value="high_noise"
+                    title="Ignores more background noise; speak clearly and a bit louder."
+                  >
+                    Loud background — strict
+                  </option>
+                </select>
+              </div>
+              <p id="vadPresetHint" class="vad-hint">
+                Applies on your next connection (disconnect and connect again, or refresh after End).
+              </p>
+              <div class="mic-level-row">
+                <span class="mic-level-label">Input level</span>
+                <div id="micLevelMeter" class="mic-level-meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Microphone input level">
+                  <div id="micLevelFill" class="mic-level-fill"></div>
+                </div>
+              </div>
               <div class="controls">
                 <button id="micBtn" class="btn ctrl-btn" data-active="false">
                   <span class="ctrl-label">Mic Off</span>
@@ -98,35 +136,21 @@
                   <span class="ctrl-label">End</span>
                 </button>
               </div>
-            </div>
 
-            <div class="right-panel">
-              <div class="quick-actions">
-                <span class="qa-label">Quick:</span>
-                <button class="btn qa-btn" data-prompt="Give me my current route status and ETA.">Route</button>
-                <button class="btn qa-btn" data-prompt="What's my pay summary for this week?">Pay</button>
-                <button class="btn qa-btn" data-prompt="How much drive time do I have left?">Hours</button>
-                <button class="btn qa-btn" data-prompt="Update my ETA because of traffic.">ETA</button>
-                <button class="btn qa-btn" data-prompt="Submit hometime request starting next week for 4 days in Nashville.">Home</button>
-                <button class="btn qa-btn" data-prompt="Check my trip execution status.">Trip</button>
-              </div>
               <div class="driver-data-panel" id="driver-data-panel">
                 <div class="driver-data-header">
                   <span>Current Driver Data</span>
                   <span id="driver-last-update" class="driver-last-update">No updates yet</span>
                 </div>
-                <div class="driver-data-grid" id="driver-data-grid"></div>
+                <div class="driver-data-content" id="driver-data-content">
+                  <!-- Sections will be rendered here -->
+                </div>
               </div>
+            </div>
+
+            <div class="right-panel">
               <div class="chat-log" id="chat-log">
                 <div class="chat-empty">Voice transcript will appear here</div>
-              </div>
-              <div class="input-area">
-                <input
-                  type="text"
-                  id="textInput"
-                  placeholder="Type a message or use voice..."
-                />
-                <button id="sendBtn" class="btn btn-send">Send</button>
               </div>
             </div>
           </div>

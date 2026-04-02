@@ -1,6 +1,14 @@
 /**
  * MediaHandler: Manages Audio/Video capture and playback
  */
+
+const DEFAULT_AUDIO_CONSTRAINTS = {
+  channelCount: 1,
+  echoCancellation: true,
+  noiseSuppression: true,
+  autoGainControl: true,
+};
+
 class MediaHandler {
   constructor() {
     this.audioContext = null;
@@ -28,12 +36,26 @@ class MediaHandler {
     }
   }
 
-  async startAudio(onAudioData) {
+  static _rmsToLevel(rms) {
+    const n = Math.min(1, rms * 4);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  /**
+   * @param {(pcmArrayBuffer: ArrayBuffer) => void} onAudioData
+   * @param {{ onLevel?: (level01: number) => void }} [options]
+   */
+  async startAudio(onAudioData, options = {}) {
     await this.initializeAudio();
+    const onLevel = typeof options.onLevel === "function" ? options.onLevel : null;
+
+    if (this.isRecording) {
+      this.stopAudio();
+    }
 
     try {
       this.mediaStream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
+        audio: DEFAULT_AUDIO_CONSTRAINTS,
       });
       const source = this.audioContext.createMediaStreamSource(
         this.mediaStream
@@ -44,15 +66,24 @@ class MediaHandler {
       );
 
       this.audioWorkletNode.port.onmessage = (event) => {
-        if (this.isRecording) {
-          const downsampled = this.downsampleBuffer(
-            event.data,
-            this.audioContext.sampleRate,
-            16000
-          );
-          const pcm16 = this.convertFloat32ToInt16(downsampled);
-          onAudioData(pcm16);
+        if (!this.isRecording) return;
+        const chunk = event.data;
+        if (onLevel && chunk && chunk.length) {
+          let sum = 0;
+          for (let i = 0; i < chunk.length; i++) {
+            const s = chunk[i];
+            sum += s * s;
+          }
+          const rms = Math.sqrt(sum / chunk.length);
+          onLevel(MediaHandler._rmsToLevel(rms));
         }
+        const downsampled = this.downsampleBuffer(
+          chunk,
+          this.audioContext.sampleRate,
+          16000
+        );
+        const pcm16 = this.convertFloat32ToInt16(downsampled);
+        onAudioData(pcm16);
       };
 
       source.connect(this.audioWorkletNode);
